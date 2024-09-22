@@ -1,8 +1,10 @@
 #!/bin/zsh
 
+set -e
+
 # 配置目录
 config_dir="$HOME/.config/brew_auto_upgrade"
-mkdir -p $config_dir
+mkdir -p "$config_dir"
 
 # 创建日志目录
 log_dir="$config_dir/log"
@@ -15,54 +17,49 @@ if ! command -v expect &> /dev/null; then
 fi
 
 # 删除现有钥匙串条目（如果存在）
-security delete-generic-password -a $USER -s brew_upgrade &>/dev/null
+security delete-generic-password -a "$USER" -s brew_upgrade &>/dev/null || true
 
 # 提示用户输入密码
 echo "请输入密码以存储在钥匙串中:"
 read -s password
 
 # 将密码添加到钥匙串
-security add-generic-password -a $USER -s brew_upgrade -w "$password"
+security add-generic-password -a "$USER" -s brew_upgrade -w "$password"
 
 # 创建expect脚本路径
 expect_script_path="$config_dir/brew_auto_upgrade"
 
 # 创建launchd plist文件路径
-plist_path="$HOME/Library/LaunchAgents/com.whoami.brewupgrade.plist"
+plist_file_path="$HOME/Library/LaunchAgents/com.whoami.brewupgrade.plist"
 
 # 卸载现有服务（如果存在）
-launchctl unload $plist_path &>/dev/null
+launchctl unload "$plist_file_path" &>/dev/null || true
 
 # 创建expect脚本
-cat > $expect_script_path <<EOL
+cat > "$expect_script_path" <<EOL
 #!/usr/bin/expect -f
+set start_time [exec date "+%Y-%m-%d %H:%M:%S ----------START----------"]
+puts "\$start_time"
 set password [exec security find-generic-password -a $USER -s brew_upgrade -w]
-spawn /opt/homebrew/bin/brew upgrade --greedy
+spawn $HOMEBREW_PREFIX/bin/brew upgrade --greedy --quiet
 expect {
     "Password:" {
         send "\$password\r"
         exp_continue
     }
-    eof {
-        puts "Command has finished."
-    }
-    default {
-        exp_continue
-    }
+    eof
 }
-spawn /opt/homebrew/bin/brew cleanup --prune=all
-expect {
-    eof {
-        puts "Command has finished."
-    }
-}
+spawn $HOMEBREW_PREFIX/bin/brew cleanup --prune=all
+expect eof
+set end_time [exec date "+%Y-%m-%d %H:%M:%S -----------END-----------"]
+puts "\$end_time"
 EOL
 
 # 使expect脚本可执行
-chmod +x $expect_script_path
+chmod +x "$expect_script_path"
 
 # 创建launchd plist文件
-cat > $plist_path <<EOL
+cat > "$plist_file_path" <<EOL
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -74,7 +71,7 @@ cat > $plist_path <<EOL
         <string>$expect_script_path</string>
     </array>
     <key>StartInterval</key>
-    <integer>3600</integer>
+    <integer>21600</integer>
     <key>RunAtLoad</key>
     <true/>
     <key>StandardErrorPath</key>
@@ -85,7 +82,13 @@ cat > $plist_path <<EOL
 </plist>
 EOL
 
-# 加载和启动服务
-launchctl load $plist_path
+# 检查 plist 文件是否成功创建
+if [ $? -ne 0 ]; then
+    echo "错误: 无法创建 plist 文件。"
+    exit 1
+fi
 
-echo "任务已成功安排！每小时将自动运行brew upgrade和brew cleanup。"
+# 加载和启动服务
+launchctl load "$plist_file_path"
+
+echo "任务已成功安排！每六个小时将自动运行brew upgrade和brew cleanup。"
