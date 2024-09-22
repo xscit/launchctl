@@ -69,7 +69,7 @@ send_log "\$end: -----------------------END-----------------------\n"
 EOL
 
 # 使expect脚本可执行
-chmod +x "$expect_script_path"
+chmod 700 "$expect_script_path"
 
 # 创建launchd plist文件
 cat > "$plist_file_path" <<EOL
