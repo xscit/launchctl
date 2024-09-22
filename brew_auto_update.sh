@@ -38,21 +38,63 @@ launchctl unload "$plist_file_path" &>/dev/null || true
 # 创建expect脚本
 cat > "$expect_script_path" <<EOL
 #!/usr/bin/expect -f
-set start_time [exec date "+%Y-%m-%d %H:%M:%S ----------START----------"]
-puts "\$start_time"
+
+# 禁用 expect 默认输出，防止自动输出到标准输出
+log_user 0
+
+# 获取密码
 set password [exec security find-generic-password -a $USER -s brew_upgrade -w]
+
+# Upgrade
 spawn $HOMEBREW_PREFIX/bin/brew upgrade --greedy --quiet
 expect {
     "Password:" {
         send "\$password\r"
         exp_continue
     }
-    eof
+    eof {
+        append output \$expect_out(buffer)
+    }
+    full_buffer {
+        append output \$expect_out(buffer)
+        exp_continue
+    }
 }
+
+# 检查退出状态
+if {[lindex [wait] 3] != 0} {
+    set upgrade_end_time [exec date "+%Y-%m-%d %H:%M:%S -----------UPGRADE FAILED-----------"]
+    puts stderr "\$upgrade_end_time"
+    puts stderr "\$output"
+} else {
+    set upgrade_end_time [exec date "+%Y-%m-%d %H:%M:%S -----------UPGRADE SUCCEEDED-----------"]
+    puts "\$upgrade_end_time"
+    puts "\$output"
+}
+
+# Cleanup
+set output "" ;# 清空输出
 spawn $HOMEBREW_PREFIX/bin/brew cleanup --prune=all
-expect eof
-set end_time [exec date "+%Y-%m-%d %H:%M:%S -----------END-----------"]
-puts "\$end_time"
+expect {
+    eof {
+        set output \$expect_out(buffer)
+    }
+    full_buffer {
+        append output \$expect_out(buffer)
+        exp_continue
+    }
+}
+
+# 检查退出状态
+if {[lindex [wait] 3] != 0} {
+    set cleanup_end_time [exec date "+%Y-%m-%d %H:%M:%S -----------CLEANUP FAILED-----------"]
+    puts stderr "\$cleanup_end_time"
+    puts stderr "\$output"
+} else {
+    set cleanup_end_time [exec date "+%Y-%m-%d %H:%M:%S -----------CLEANUP SUCCEEDED-----------"]
+    puts "\$cleanup_end_time"
+    puts "\$output"
+}
 EOL
 
 # 使expect脚本可执行
