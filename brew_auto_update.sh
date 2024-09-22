@@ -39,62 +39,33 @@ launchctl unload "$plist_file_path" &>/dev/null || true
 cat > "$expect_script_path" <<EOL
 #!/usr/bin/expect -f
 
-# 禁用 expect 默认输出，防止自动输出到标准输出
-log_user 0
+#日志
+log_file $log_dir/brew_auto_upgrade.log
+
+# Start Timestamp
+set start [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"]
+send_log "\$start: ----------------------START----------------------\n"
 
 # 获取密码
 set password [exec security find-generic-password -a $USER -s brew_upgrade -w]
 
 # Upgrade
-spawn $HOMEBREW_PREFIX/bin/brew upgrade --greedy --quiet
+spawn $HOMEBREW_PREFIX/bin/brew upgrade --greedy
 expect {
     "Password:" {
         send "\$password\r"
         exp_continue
     }
-    eof {
-        append output \$expect_out(buffer)
-    }
-    full_buffer {
-        append output \$expect_out(buffer)
-        exp_continue
-    }
-}
-
-# 检查退出状态
-if {[lindex [wait] 3] != 0} {
-    set upgrade_end_time [exec date "+%Y-%m-%d %H:%M:%S -----------UPGRADE FAILED-----------"]
-    puts stderr "\$upgrade_end_time"
-    puts stderr "\$output"
-} else {
-    set upgrade_end_time [exec date "+%Y-%m-%d %H:%M:%S -----------UPGRADE SUCCEEDED-----------"]
-    puts "\$upgrade_end_time"
-    puts "\$output"
+    eof 
 }
 
 # Cleanup
-set output "" ;# 清空输出
 spawn $HOMEBREW_PREFIX/bin/brew cleanup --prune=all
-expect {
-    eof {
-        set output \$expect_out(buffer)
-    }
-    full_buffer {
-        append output \$expect_out(buffer)
-        exp_continue
-    }
-}
+expect eof
 
-# 检查退出状态
-if {[lindex [wait] 3] != 0} {
-    set cleanup_end_time [exec date "+%Y-%m-%d %H:%M:%S -----------CLEANUP FAILED-----------"]
-    puts stderr "\$cleanup_end_time"
-    puts stderr "\$output"
-} else {
-    set cleanup_end_time [exec date "+%Y-%m-%d %H:%M:%S -----------CLEANUP SUCCEEDED-----------"]
-    puts "\$cleanup_end_time"
-    puts "\$output"
-}
+# End Timestamp
+set end [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"]
+send_log "\$end: -----------------------END-----------------------\n"
 EOL
 
 # 使expect脚本可执行
@@ -116,10 +87,6 @@ cat > "$plist_file_path" <<EOL
     <integer>21600</integer>
     <key>RunAtLoad</key>
     <true/>
-    <key>StandardErrorPath</key>
-    <string>$log_dir/brew_auto_upgrade.err</string>
-    <key>StandardOutPath</key>
-    <string>$log_dir/brew_auto_upgrade.log</string>
 </dict>
 </plist>
 EOL
