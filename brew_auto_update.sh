@@ -50,7 +50,7 @@ send_log "\$start: ----------------------START----------------------\n"
 set password [exec security find-generic-password -a $USER -s brew_upgrade -w]
 
 # Upgrade
-spawn $HOMEBREW_PREFIX/bin/brew upgrade --greedy
+spawn $HOMEBREW_PREFIX/bin/brew upgrade --greedy --quiet
 expect {
     "Password:" {
         send "\$password\r"
