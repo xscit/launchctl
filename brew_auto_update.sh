@@ -56,7 +56,12 @@ expect {
         send "\$password\r"
         exp_continue
     }
-    eof 
+    eof {
+        puts "Command has finished."
+    }
+    default {
+        exp_continue
+    }
 }
 
 # Cleanup
