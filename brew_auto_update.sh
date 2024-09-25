@@ -42,14 +42,19 @@ cat > "$expect_script_path" <<EOL
 #日志
 log_file $log_dir/brew_auto_upgrade.log
 
+proc log {message} {
+    set timestamp [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"]
+    send_log "\$timestamp: \$message\n"
+}
+
 # Start Timestamp
-set start [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"]
-send_log "\$start: ----------------------START----------------------\n"
+log "----------------------START----------------------"
 
 # 获取密码
 set password [exec security find-generic-password -a $USER -s brew_upgrade -w]
 
 # Upgrade
+log "Upgrade has started."
 spawn $HOMEBREW_PREFIX/bin/brew upgrade --greedy --quiet
 expect {
     "Password:" {
@@ -57,7 +62,7 @@ expect {
         exp_continue
     }
     eof {
-        puts "Command has finished."
+        log "Upgrade has finished."
     }
     default {
         exp_continue
@@ -65,12 +70,17 @@ expect {
 }
 
 # Cleanup
+log "Cleanup has started."
 spawn $HOMEBREW_PREFIX/bin/brew cleanup --prune=all
-expect eof
+expect {
+    eof {
+        log "Cleanup has finished."
+    }
+}
 
 # End Timestamp
 set end [clock format [clock seconds] -format "%Y-%m-%d %H:%M:%S"]
-send_log "\$end: -----------------------END-----------------------\n"
+log "-----------------------END-----------------------"
 EOL
 
 # 使expect脚本可执行
